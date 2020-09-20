@@ -108,13 +108,13 @@ def TreeGridSearchCV(start_leaf_n, end_leaf_n, X_train, y_train):
     #20 values of min_samples leaf from 0.5% sample to 5% of the training data
     #20 values of max_depth from 1, 10
     param_grid = {'min_samples_leaf':np.linspace(start_leaf_n,end_leaf_n,20).round().astype('int'), 'max_depth':np.arange(1,10),
-                  "min_samples_split":np.arange(5,20,5), 'class_weight':["balanced"] }
+                  'class_weight':["balanced"] }
 
     tree = GridSearchCV(estimator = DecisionTreeClassifier(), param_grid=param_grid, cv=10,refit=True)
     tree.fit(X_train, y_train)
     print("Per Hyperparameter tuning, best parameters are:")
     print(tree.best_params_)
-    return tree.best_params_['max_depth'], tree.best_params_['min_samples_leaf'], tree.best_params['min_sample_split']
+    return tree.best_params_['max_depth'], tree.best_params_['min_samples_leaf']
 
 
 hyperTree(_x_train, _y_train, _x_test, _y_test, "Credit Default Data")  
@@ -129,17 +129,42 @@ best_depth, best_min_sample_leaf, best_min_sample_split = TreeGridSearchCV(start
                                                      end_leaf_n,
                                                      _x_train,
                                                      _y_train)
-
-#Post-pruning
-
 #Per Hyperparameter tuning, best parameters are:
 # {'max_depth': 4, 'min_samples_leaf': 204}
 
+start_leaf_n = round(0.001*len(_x_train))
+end_leaf_n = round(.01*len(_x_train))
+
+#Add a parameter, min_samples_split (5,10,15), class_weight = balanced
+# {'class_weight': 'balanced', 'max_depth': 1, 'min_samples_leaf': 105, 'min_samples_split': 5}
+
+
+best_depth, best_min_sample_leaf = TreeGridSearchCV(start_leaf_n,
+                                                     end_leaf_n,
+                                                     _x_train,
+                                                     _y_train)
+
+# Per Hyperparameter tuning, best parameters are:
+# {'class_weight': 'balanced', 'max_depth': 1, 'min_samples_leaf': 21}
+
+#Post-pruning
+post_prune = init_clf.cost_copmlexity_pruning_path(_x_train,_y_train)
+ccp_alphas, impurities = post_prune.ccp_alphas, post_prune.imjurities
+
+
+
+# {'class_weight': 'balanced', 'max_depth': 1, 'min_samples_leaf': 105, 'min_samples_split': 5}
+
 #Plot learning curve
 
-DT_credit =  DecisionTreeClassifier(max_depth=best_depth, 
-                                    min_samples_leaf=best_min_sample_leaf, 
-                                    random_state=1, criterion='gini')
+#candidate parameter combination:
+    max_depth = 4, min_samples_leaf = 204
+    max_depth = 1, min_samples_leaf = 21, class_weight = "balanced"
+    max_depth = 1, min_sapmles_leaf = 105, min_samples_split = 5, class_weight ="balanced"
+DT_credit =  DecisionTreeClassifier(max_depth=1, 
+                                    min_samples_leaf=21, 
+                                    random_state=1, criterion='gini', 
+                                    class_weight = "balanced")
 train_samp_phish, DT_train_score_phish, DT_fit_time_phish,\
     DT_pred_time_phish = plot_learning_curve(DT_credit, _x_train, _y_train,
                                              title="Decision Tree Credit Data")
