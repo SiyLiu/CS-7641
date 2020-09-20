@@ -9,6 +9,7 @@ import pandas as pd
 import numpy as np
 import seaborn as sbn
 import matplotlib.pyplot as plt
+from helper import *
 
 from sklearn.model_selection import learning_curve, train_test_split,GridSearchCV
 from sklearn.tree import DecisionTreeClassifier
@@ -68,7 +69,7 @@ len(_y_train) #9000
 sum(_y_train) #4645
 
 #Decision Tree
-init_clf = DecisionTreeClassifier()
+init_clf = DecisionTreeClassifier(random_state = 1)
 init_clf.fit(_x_train,_y_train)
 init_clf.get_depth() #41
 
@@ -155,25 +156,29 @@ ccp_alphas, impurities = post_prune.ccp_alphas, post_prune.imjurities
 
 # {'class_weight': 'balanced', 'max_depth': 1, 'min_samples_leaf': 105, 'min_samples_split': 5}
 
-#Plot learning curve
 
 #candidate parameter combination:
-    max_depth = 4, min_samples_leaf = 204
-    max_depth = 1, min_samples_leaf = 21, class_weight = "balanced"
-    max_depth = 1, min_sapmles_leaf = 105, min_samples_split = 5, class_weight ="balanced"
+    # max_depth = 4, min_samples_leaf = 204
+    # max_depth = 1, min_samples_leaf = 21, class_weight = "balanced"
+    # max_depth = 1, min_sapmles_leaf = 105, min_samples_split = 5, class_weight ="balanced"
+    
+
+#Plot learning curves with best models
+
 DT_credit =  DecisionTreeClassifier(max_depth=1, 
                                     min_samples_leaf=21, 
                                     random_state=1, criterion='gini', 
                                     class_weight = "balanced")
-train_samp_phish, DT_train_score_phish, DT_fit_time_phish,\
-    DT_pred_time_phish = plot_learning_curve(DT_credit, _x_train, _y_train,
+train_samp_phish, DT_train_score_phish, DT_fit_time_phish,DT_pred_time_phish = plot_learning_curve(DT_credit, _x_train, _y_train,
                                              title="Decision Tree Credit Data")
 
 final_classifier_evaluation(DT_credit, _x_train, _x_test, _y_train, _y_test)
     
     
-    
-    
+#Post prune
+clf = DecisionTreeClassifier(random_state = 1)
+clf.cost_copmlexity_pruning_path(_x_train, _y_train)
+
     
     
     
