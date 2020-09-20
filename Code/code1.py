@@ -165,10 +165,10 @@ ccp_alphas, impurities = post_prune.ccp_alphas, post_prune.imjurities
 
 #Plot learning curves with best models
 
-DT_credit =  DecisionTreeClassifier(random_state=0,
+DT_credit =  DecisionTreeClassifier(random_state=1,
                                     max_depth=1, 
                                     min_samples_leaf=21, 
-                                    random_state=1, criterion='gini', 
+                                    criterion='gini', 
                                     class_weight = "balanced")
 train_samp_phish, DT_train_score_phish, DT_fit_time_phish,DT_pred_time_phish = plot_learning_curve(DT_credit, _x_train, _y_train,
                                              title="Decision Tree Credit Data")
@@ -226,12 +226,19 @@ final_classifier_evaluation(DT_credit2, _x_train, _x_test, _y_train, _y_test)
 
 ## Artificial Neural Network
 from sklearn.neural_network import MLPClassifier
+from sklearn import preprocessing
+
+#Normalize the data before building the ANN model
+scaler = preprocessing.StandardScaler().fit(_x_train)
+scale_x_train = scaler.transform(_x_train)
+scale_x_test = scaler.transform(_x_test)
+
 
 def hyperNN(X_train, y_train, X_test, y_test, title, activation = "logistic"):
 
     f1_test = []
     f1_train = []
-    hlist = np.linspace(1,150,30).astype('int')
+    hlist = np.linspace(1,15,15).astype('int')
     for i in hlist:         
             clf = MLPClassifier(hidden_layer_sizes=(i,), solver='adam', activation=activation, 
                                 learning_rate_init=0.05, random_state=1)
@@ -251,27 +258,130 @@ def hyperNN(X_train, y_train, X_test, y_test, title, activation = "logistic"):
     plt.tight_layout()
     plt.show()
     
-    
-def NNGridSearchCV(X_train, y_train):
+hyperNN(scale_x_train,_y_train, scale_x_test, _y_test, "Credit Data Neural Network", activation = "logistic")
+# alpha = 0.05, hidden_layer = 1
+
+   
+def NNGridSearchCV(X_train, y_train,hidden, alpha):
     #parameters to search:
     #number of hidden units
     #learning_rate
-    h_units = [5, 10, 20, 30, 40, 50, 75, 100]
-    learning_rates = [0.01, 0.05, .1]
-    param_grid = {'hidden_layer_sizes': h_units, 'learning_rate_init': learning_rates}
 
-    net = GridSearchCV(estimator = MLPClassifier(solver='adam',activation='logistic',random_state=100),
+    param_grid = {'hidden_layer_sizes': hidden, 
+                  'learning_rate_init': alpha,
+                  'activation':['logistic','relu']}
+
+    net = GridSearchCV(estimator = MLPClassifier(solver='adam',random_state=1),
                        param_grid=param_grid, cv=10)
     net.fit(X_train, y_train)
     print("Per Hyperparameter tuning, best parameters are:")
     print(net.best_params_)
-    return net.best_params_['hidden_layer_sizes'], net.best_params_['learning_rate_init']
+    return net.best_params_['hidden_layer_sizes'], net.best_params_['learning_rate_init'], net.best_params_['activation']
 
  
+d = _x_train.shape[1]
+hiddens = [(h,)*l for l in [1,2,3] for h in [d,d//2,d*2 ]]
+alphas = [10**-x for x in np.arange(-1,5.01,1/2)]
+
+hidden_layers, learning_rate, activation = NNGridSearchCV(scale_x_train,
+                                                          _y_train, 
+                                                          hiddens, 
+                                                          alphas)  
     
+
+
+
+
+#Boosting
+
+def hyperBoost(X_train, y_train, X_test, y_test, max_depth, min_samples_leaf, title):
     
+    f1_test = []
+    f1_train = []
+    n_estimators = np.linspace(1,250,40).astype('int')
+    for i in n_estimators:         
+            clf = GradientBoostingClassifier(n_estimators=i, max_depth=int(max_depth/2), 
+                                             min_samples_leaf=int(min_samples_leaf/2), random_state=100,)
+            clf.fit(X_train, y_train)
+            y_pred_test = clf.predict(X_test)
+            y_pred_train = clf.predict(X_train)
+            f1_test.append(f1_score(y_test, y_pred_test))
+            f1_train.append(f1_score(y_train, y_pred_train))
+      
+    plt.plot(n_estimators, f1_test, 'o-', color='r', label='Test F1 Score')
+    plt.plot(n_estimators, f1_train, 'o-', color = 'b', label='Train F1 Score')
+    plt.ylabel('Model F1 Score')
+    plt.xlabel('No. Estimators')
     
+    plt.title(title)
+    plt.legend(loc='best')
+    plt.tight_layout()
+    plt.show()
+
+def BoostedGridSearchCV(start_leaf_n, end_leaf_n, X_train, y_train):
+    #parameters to search:
+    #n_estimators, learning_rate, max_depth, min_samples_leaf
+    param_grid = {'min_samples_leaf': np.linspace(start_leaf_n,end_leaf_n,3).round().astype('int'),
+                  'max_depth': np.arange(1,4),
+                  'n_estimators': np.linspace(10,100,3).round().astype('int'),
+                  'learning_rate': np.linspace(.001,.1,3)}
+
+    boost = GridSearchCV(estimator = GradientBoostingClassifier(), param_grid=param_grid, cv=10)
+    boost.fit(X_train, y_train)
+    print("Per Hyperparameter tuning, best parameters are:")
+    print(boost.best_params_)
+    return boost.best_params_['max_depth'], boost.best_params_['min_samples_leaf'], boost.best_params_['n_estimators'], boost.best_params_['learning_rate']
+
     
+ #SVM
+
+def hyperSVM(X_train, y_train, X_test, y_test, title):
+
+    f1_test = []
+    f1_train = []
+    kernel_func = ['linear','poly','rbf','sigmoid']
+    for i in kernel_func:         
+            if i == 'poly':
+                for j in [2,3,4,5,6,7,8]:
+                    clf = SVC(kernel=i, degree=j,random_state=100)
+                    clf.fit(X_train, y_train)
+                    y_pred_test = clf.predict(X_test)
+                    y_pred_train = clf.predict(X_train)
+                    f1_test.append(f1_score(y_test, y_pred_test))
+                    f1_train.append(f1_score(y_train, y_pred_train))
+            else:    
+                clf = SVC(kernel=i, random_state=100)
+                clf.fit(X_train, y_train)
+                y_pred_test = clf.predict(X_test)
+                y_pred_train = clf.predict(X_train)
+                f1_test.append(f1_score(y_test, y_pred_test))
+                f1_train.append(f1_score(y_train, y_pred_train))
+                
+    xvals = ['linear','poly2','poly3','poly4','poly5','poly6','poly7','poly8','rbf','sigmoid']
+    plt.plot(xvals, f1_test, 'o-', color='r', label='Test F1 Score')
+    plt.plot(xvals, f1_train, 'o-', color = 'b', label='Train F1 Score')
+    plt.ylabel('Model F1 Score')
+    plt.xlabel('Kernel Function')
+    
+    plt.title(title)
+    plt.legend(loc='best')
+    plt.tight_layout()
+    plt.show()
+    
+def SVMGridSearchCV(X_train, y_train):
+    #parameters to search:
+    #penalty parameter, C
+    #
+    Cs = [1e-4, 1e-3, 1e-2, 1e01, 1]
+    gammas = [1,10,100]
+    param_grid = {'C': Cs, 'gamma': gammas}
+
+    clf = GridSearchCV(estimator = SVC(kernel='rbf',random_state=100),
+                       param_grid=param_grid, cv=10)
+    clf.fit(X_train, y_train)
+    print("Per Hyperparameter tuning, best parameters are:")
+    print(clf.best_params_)
+    return clf.best_params_['C'], clf.best_params_['gamma']
     
     
     
