@@ -15,7 +15,7 @@ from sklearn.model_selection import learning_curve, train_test_split,GridSearchC
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.metrics import roc_auc_score, accuracy_score, f1_score, precision_score, recall_score, confusion_matrix
 
-raw_data = pd.read_csv("default_of_credit_card_clients.csv",header = 0)
+raw_data = pd.read_csv("../Data/default_of_credit_card_clients.csv",header = 0)
 
 #Check data sanity
 raw_data.describe()
@@ -165,7 +165,8 @@ ccp_alphas, impurities = post_prune.ccp_alphas, post_prune.imjurities
 
 #Plot learning curves with best models
 
-DT_credit =  DecisionTreeClassifier(max_depth=1, 
+DT_credit =  DecisionTreeClassifier(random_state=0,
+                                    max_depth=1, 
                                     min_samples_leaf=21, 
                                     random_state=1, criterion='gini', 
                                     class_weight = "balanced")
@@ -177,10 +178,96 @@ final_classifier_evaluation(DT_credit, _x_train, _x_test, _y_train, _y_test)
     
 #Post prune
 clf = DecisionTreeClassifier(random_state = 1)
-clf.cost_copmlexity_pruning_path(_x_train, _y_train)
+path = clf.cost_complexity_pruning_path(_x_train, _y_train)
+
+ccp_alphas, impurities = path.ccp_alphas, path.impurities
+
+fig, ax = plt.subplots()
+ax.plot(ccp_alphas[:-1], impurities[:-1], marker='o', drawstyle="steps-post")
+ax.set_xlabel("effective alpha")
+ax.set_ylabel("total impurity of leaves")
+ax.set_title("Total Impurity vs effective alpha for training set")
 
     
+clfs = []
+for ccp_alpha in ccp_alphas:
+    clf = DecisionTreeClassifier(random_state=1, ccp_alpha=ccp_alpha)
+    clf.fit(_x_train, _y_train)
+    clfs.append(clf)
+print("Number of nodes in the last tree is: {} with ccp_alpha: {}".format(
+      clfs[-1].tree_.node_count, ccp_alphas[-1]))  
+
+#Number of nodes in the last tree is: 1 with ccp_alpha: 0.05344842427328045
+
+clfs2 = clfs[1300:]
+ccp_alphas2 = ccp_alphas[1300:]
+
+node_counts = [clf.tree_.node_count for clf in clfs2]
+depth = [clf.tree_.max_depth for clf in clfs2]
+fig, ax = plt.subplots(2, 1)
+ax[0].plot(ccp_alphas2, node_counts, marker='o', drawstyle="steps-post")
+ax[0].set_xlabel("alpha")
+ax[0].set_ylabel("number of nodes")
+ax[0].set_title("Number of nodes vs alpha")
+ax[1].plot(ccp_alphas2, depth, marker='o', drawstyle="steps-post")
+ax[1].set_xlabel("alpha")
+ax[1].set_ylabel("depth of tree")
+ax[1].set_title("Depth vs alpha")
+fig.tight_layout()
+
+
+DT_credit2 =  DecisionTreeClassifier(ccp_alpha=0.0004,
+                                    random_state=1, criterion='gini', 
+                                    class_weight = "balanced")
+train_samp_phish, DT_train_score_phish, DT_fit_time_phish,DT_pred_time_phish = plot_learning_curve(DT_credit2, _x_train, _y_train,
+                                             title="Decision Tree Credit Data")
+
+final_classifier_evaluation(DT_credit2, _x_train, _x_test, _y_train, _y_test)
+
+## Artificial Neural Network
+from sklearn.neural_network import MLPClassifier
+
+def hyperNN(X_train, y_train, X_test, y_test, title, activation = "logistic"):
+
+    f1_test = []
+    f1_train = []
+    hlist = np.linspace(1,150,30).astype('int')
+    for i in hlist:         
+            clf = MLPClassifier(hidden_layer_sizes=(i,), solver='adam', activation=activation, 
+                                learning_rate_init=0.05, random_state=1)
+            clf.fit(X_train, y_train)
+            y_pred_test = clf.predict(X_test)
+            y_pred_train = clf.predict(X_train)
+            f1_test.append(f1_score(y_test, y_pred_test))
+            f1_train.append(f1_score(y_train, y_pred_train))
+      
+    plt.plot(hlist, f1_test, 'o-', color='r', label='Test F1 Score')
+    plt.plot(hlist, f1_train, 'o-', color = 'b', label='Train F1 Score')
+    plt.ylabel('Model F1 Score')
+    plt.xlabel('No. Hidden Units')
     
+    plt.title(title)
+    plt.legend(loc='best')
+    plt.tight_layout()
+    plt.show()
+    
+    
+def NNGridSearchCV(X_train, y_train):
+    #parameters to search:
+    #number of hidden units
+    #learning_rate
+    h_units = [5, 10, 20, 30, 40, 50, 75, 100]
+    learning_rates = [0.01, 0.05, .1]
+    param_grid = {'hidden_layer_sizes': h_units, 'learning_rate_init': learning_rates}
+
+    net = GridSearchCV(estimator = MLPClassifier(solver='adam',activation='logistic',random_state=100),
+                       param_grid=param_grid, cv=10)
+    net.fit(X_train, y_train)
+    print("Per Hyperparameter tuning, best parameters are:")
+    print(net.best_params_)
+    return net.best_params_['hidden_layer_sizes'], net.best_params_['learning_rate_init']
+
+ 
     
     
     
