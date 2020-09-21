@@ -330,8 +330,8 @@ final_classifier_evaluation(ANN_credit, scale_x_train, scale_x_test, _y_train, _
 
 #Boosting - more aggresive in pruning
 #max_depth of the decision tree: 4
-#min_samples_leaf: 2014
-
+#min_samples_leaf: 204
+from sklearn.ensemble import GradientBoostingClassifier
 def hyperBoost(X_train, y_train, X_test, y_test, max_depth, min_samples_leaf, title):
     
     f1_test = []
@@ -355,6 +355,9 @@ def hyperBoost(X_train, y_train, X_test, y_test, max_depth, min_samples_leaf, ti
     plt.legend(loc='best')
     plt.tight_layout()
     plt.show()
+    
+hyperBoost(_x_train, _y_train, _x_test, _y_test, 4, 204, 
+           "Model Complexity Curve for Boosted Tree (Credit Data)\nHyperparameter : No. Estimators")
 
 def BoostedGridSearchCV(start_leaf_n, end_leaf_n, X_train, y_train):
     #parameters to search:
@@ -370,7 +373,30 @@ def BoostedGridSearchCV(start_leaf_n, end_leaf_n, X_train, y_train):
     print(boost.best_params_)
     return boost.best_params_['max_depth'], boost.best_params_['min_samples_leaf'], boost.best_params_['n_estimators'], boost.best_params_['learning_rate']
 
-    
+start_leaf_n = round(0.005*len(_x_train))
+end_leaf_n = round(0.05*len(_x_train))  
+
+max_depth, min_samples_leaf, n_est, learn_rate = BoostedGridSearchCV(start_leaf_n,end_leaf_n,_x_train,_y_train) 
+
+#Per Hyperparameter tuning, best parameters are:
+#{'learning_rate': 0.1, 'max_depth': 3, 'min_samples_leaf': 1050, 'n_estimators': 55}
+
+Boost_credit = GradientBoostingClassifier(max_depth=max_depth, min_samples_leaf=min_samples_leaf, 
+                                              n_estimators=n_est, learning_rate=learn_rate, random_state=1)
+
+train_samp_phish, BT_train_score_phish, BT_fit_time_phish, BT_pred_time_phish = plot_learning_curve(Boost_credit, _x_train, _y_train,title="Boosted Tree Credit Data")
+final_classifier_evaluation(Boost_credit, _x_train, _x_test, _y_train, _y_test)
+
+# *****************************************************
+# Model Training Time (s):   8.52702
+# Model Prediction Time (s): 0.04931
+
+# F1 Score:  0.47
+# Accuracy:  0.82     AUC:       0.66
+# Precision: 0.66     Recall:    0.36
+# *****************************************************
+
+
  #SVM
 
 def hyperSVM(X_train, y_train, X_test, y_test, title):
@@ -380,7 +406,7 @@ def hyperSVM(X_train, y_train, X_test, y_test, title):
     kernel_func = ['linear','poly','rbf','sigmoid']
     for i in kernel_func:         
             if i == 'poly':
-                for j in [2,3,4,5,6,7,8]:
+                for j in [2,3,4]:
                     clf = SVC(kernel=i, degree=j,random_state=100)
                     clf.fit(X_train, y_train)
                     y_pred_test = clf.predict(X_test)
@@ -395,7 +421,7 @@ def hyperSVM(X_train, y_train, X_test, y_test, title):
                 f1_test.append(f1_score(y_test, y_pred_test))
                 f1_train.append(f1_score(y_train, y_pred_train))
                 
-    xvals = ['linear','poly2','poly3','poly4','poly5','poly6','poly7','poly8','rbf','sigmoid']
+    xvals = ['linear','poly2','poly3','poly4','rbf','sigmoid']
     plt.plot(xvals, f1_test, 'o-', color='r', label='Test F1 Score')
     plt.plot(xvals, f1_train, 'o-', color = 'b', label='Train F1 Score')
     plt.ylabel('Model F1 Score')
@@ -405,23 +431,37 @@ def hyperSVM(X_train, y_train, X_test, y_test, title):
     plt.legend(loc='best')
     plt.tight_layout()
     plt.show()
-    
-def SVMGridSearchCV(X_train, y_train):
-    #parameters to search:
-    #penalty parameter, C
-    #
-    Cs = [1e-4, 1e-3, 1e-2, 1e01, 1]
-    gammas = [1,10,100]
-    param_grid = {'C': Cs, 'gamma': gammas}
 
-    clf = GridSearchCV(estimator = SVC(kernel='rbf',random_state=100),
-                       param_grid=param_grid, cv=10)
-    clf.fit(X_train, y_train)
-    print("Per Hyperparameter tuning, best parameters are:")
-    print(clf.best_params_)
-    return clf.best_params_['C'], clf.best_params_['gamma']
+hyperSVM(scale_x_train, _y_train, scale_x_test, _y_test, "SVM with different kernels, Credit Data")
     
+#RBF is the best
+
+## KNN
+
+from sklearn.neighbors import KNeighborsClassifier as kNN
+
+def hyperKNN(X_train, y_train, X_test, y_test, title):
     
+    f1_test = []
+    f1_train = []
+    klist = np.linspace(10,400,40).astype('int')
+    for i in klist:
+        clf = kNN(n_neighbors=i,n_jobs=-1)
+        clf.fit(X_train,y_train)
+        y_pred_test = clf.predict(X_test)
+        y_pred_train = clf.predict(X_train)
+        f1_test.append(f1_score(y_test, y_pred_test))
+        f1_train.append(f1_score(y_train, y_pred_train))
+        
+    plt.plot(klist, f1_test, 'o-', color='r', label='Test F1 Score')
+    plt.plot(klist, f1_train, 'o-', color = 'b', label='Train F1 Score')
+    plt.ylabel('Model F1 Score')
+    plt.xlabel('No. Neighbors')
     
+    plt.title(title)
+    plt.legend(loc='best')
+    plt.tight_layout()
+    plt.show()
     
-    
+hyperKNN(scale_x_train, _y_train, scale_x_test, _y_test,title="Model Complexity Curve for kNN (Diabetes Data)\nHyperparameter : No. Neighbors")
+
