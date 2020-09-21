@@ -166,15 +166,24 @@ ccp_alphas, impurities = post_prune.ccp_alphas, post_prune.imjurities
 #Plot learning curves with best models
 
 DT_credit =  DecisionTreeClassifier(random_state=1,
-                                    max_depth=1, 
-                                    min_samples_leaf=21, 
+                                    max_depth=4, 
+                                    min_samples_leaf=204,
                                     criterion='gini', 
                                     class_weight = "balanced")
 train_samp_phish, DT_train_score_phish, DT_fit_time_phish,DT_pred_time_phish = plot_learning_curve(DT_credit, _x_train, _y_train,
                                              title="Decision Tree Credit Data")
 
 final_classifier_evaluation(DT_credit, _x_train, _x_test, _y_train, _y_test)
-    
+
+#  Model Evaluation Metrics Using Untouched Test Dataset
+# *****************************************************
+# Model Training Time (s):   0.14153
+# Model Prediction Time (s): 0.00139
+
+# F1 Score:  0.53
+# Accuracy:  0.78     AUC:       0.70
+# Precision: 0.50     Recall:    0.56
+# *****************************************************   
     
 #Post prune
 clf = DecisionTreeClassifier(random_state = 1)
@@ -223,6 +232,14 @@ train_samp_phish, DT_train_score_phish, DT_fit_time_phish,DT_pred_time_phish = p
                                              title="Decision Tree Credit Data")
 
 final_classifier_evaluation(DT_credit2, _x_train, _x_test, _y_train, _y_test)
+# *****************************************************
+# Model Training Time (s):   0.54855
+# Model Prediction Time (s): 0.00160
+
+# F1 Score:  0.53
+# Accuracy:  0.75     AUC:       0.71
+# Precision: 0.45     Recall:    0.63
+# *****************************************************
 
 ## Artificial Neural Network
 from sklearn.neural_network import MLPClassifier
@@ -281,27 +298,48 @@ def NNGridSearchCV(X_train, y_train,hidden, alpha):
  
 d = _x_train.shape[1]
 hiddens = [(h,)*l for l in [1,2,3] for h in [d,d//2,d*2 ]]
-alphas = [10**-x for x in np.arange(-1,5.01,1/2)]
+alphas = [10**-x for x in np.arange(-2,2.0,1)]
 
 hidden_layers, learning_rate, activation = NNGridSearchCV(scale_x_train,
                                                           _y_train, 
                                                           hiddens, 
                                                           alphas)  
+# Per Hyperparameter tuning, best parameters are:
+# {'activation': 'logistic', 'hidden_layer_sizes': (23, 23, 23), 'learning_rate_init': 0.1}
+
+ANN_credit = MLPClassifier(hidden_layer_sizes = hidden_layers,
+                           activation = activation,
+                           solver = "adam",
+                           random_state = 1)
+
+train_samp_phish, NN_train_score_phish, NN_fit_time_phish, \
+    NN_pred_time_phish = plot_learning_curve(ANN_credit, \
+    scale_x_train, _y_train,title="Neural Net Credit Data")
+final_classifier_evaluation(ANN_credit, scale_x_train, scale_x_test, _y_train, _y_test)
     
+# *****************************************************
+# Model Training Time (s):   30.40333
+# Model Prediction Time (s): 0.03332
+
+# F1 Score:  0.47
+# Accuracy:  0.82     AUC:       0.66
+# Precision: 0.67     Recall:    0.36
+# *****************************************************
 
 
 
-
-#Boosting
+#Boosting - more aggresive in pruning
+#max_depth of the decision tree: 4
+#min_samples_leaf: 2014
 
 def hyperBoost(X_train, y_train, X_test, y_test, max_depth, min_samples_leaf, title):
     
     f1_test = []
     f1_train = []
-    n_estimators = np.linspace(1,250,40).astype('int')
+    n_estimators = np.linspace(10,200,20).astype('int')
     for i in n_estimators:         
             clf = GradientBoostingClassifier(n_estimators=i, max_depth=int(max_depth/2), 
-                                             min_samples_leaf=int(min_samples_leaf/2), random_state=100,)
+                                             min_samples_leaf=int(min_samples_leaf/2), random_state=1,)
             clf.fit(X_train, y_train)
             y_pred_test = clf.predict(X_test)
             y_pred_train = clf.predict(X_train)
